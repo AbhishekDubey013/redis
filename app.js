@@ -36,6 +36,11 @@ function logAllDataInRedis() {
   });
 }
 
+const configuration = new Configuration({
+  apiKey: process.env.SECRET_KEY,
+});
+const openai = new OpenAIApi(configuration);
+
 const client = new Client();
 let qrCodeImage = null;
 const conversations = new Map();
@@ -55,11 +60,6 @@ client.on('ready', () => {
 });
 
 client.initialize();
-
-const configuration = new Configuration({
-  apiKey: process.env.SECRET_KEY,
-});
-const openai = new OpenAIApi(configuration);
 
 async function runCompletion(whatsappNumber, message) {
   // Get the conversation history and context for the WhatsApp number from Redis
@@ -118,12 +118,9 @@ app.get('/', (req, res) => {
 
 // Check if the server is already running on the specified port
 const server = app.listen(port, () => {
-  const address = server.address();
-  if (address) {
-    console.log(`Server is running on http://localhost:${address.port}`);
-    // Log all data in Redis when the server is ready
-    logAllDataInRedis();
-  }
+  console.log(`Server is running on http://localhost:${port}`);
+  // Log all data in Redis when the server is ready
+  logAllDataInRedis();
 });
 
 // Handle graceful shutdown
