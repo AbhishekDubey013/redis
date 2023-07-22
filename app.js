@@ -15,35 +15,8 @@ redisClient.on('error', (err) => {
   console.error('Redis client error:', err);
 });
 
-// Helper function to log all data in Redis
-function logAllDataInRedis() {
-  redisClient.keys('*', (err, keys) => {
-    if (err) {
-      console.error('Error fetching keys from Redis:', err);
-      return;
-    }
-
-    keys.forEach((key) => {
-      redisClient.get(key, (err, value) => {
-        if (err) {
-          console.error(`Error fetching value for key '${key}' from Redis:`, err);
-          return;
-        }
-
-        console.log(`Key: ${key}, Value: ${value}`);
-      });
-    });
-  });
-}
-
-const configuration = new Configuration({
-  apiKey: process.env.SECRET_KEY,
-});
-const openai = new OpenAIApi(configuration);
-
 const client = new Client();
 let qrCodeImage = null;
-const conversations = new Map();
 
 client.on('qr', (qr) => {
   qrcode.toDataURL(qr, { errorCorrectionLevel: 'L' }, (err, url) => {
@@ -59,52 +32,60 @@ client.on('ready', () => {
   console.log('Client is ready');
 });
 
-const initializeClient = () => {
-  client.initialize();
-};
+client.initialize();
 
-const runCompletion = async (whatsappNumber, message) => {
+const configuration = new Configuration({
+  apiKey: process.env.SECRET_KEY,
+});
+const openai = new OpenAIApi(configuration);
+
+async function runCompletion(whatsappNumber, message) {
   // Get the conversation history and context for the WhatsApp number from Redis
-  const serializedData = await new Promise((resolve, reject) => {
-    redisClient.get(whatsappNumber, (err, data) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(data);
-      }
+  try {
+    const serializedData = await new Promise((resolve, reject) => {
+      redisClient.get(whatsappNumber, (err, data) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(data);
+        }
+      });
     });
-  });
 
-  const conversation = serializedData ? JSON.parse(serializedData) : { history: [], context: '' };
+    const conversation = serializedData ? JSON.parse(serializedData) : { history: [], context: '' };
 
-  // Store the latest message in the history and keep only the last 5 messages
-  conversation.history.push(message);
-  conversation.history = conversation.history.slice(-5);
+    // Store the latest message in the history and keep only the last 5 messages
+    conversation.history.push(message);
+    conversation.history = conversation.history.slice(-5);
 
-  const context = conversation.history.join('\n');
+    const context = conversation.history.join('\n');
 
-  const completion = await openai.createCompletion({
-    model: 'text-davinci-003',
-    prompt: context,
-    max_tokens: 200,
-  });
-
-  // Update the conversation context for the WhatsApp number
-  conversation.context = completion.data.choices[0].text;
-
-  // Serialize the conversation data and store it back in Redis
-  await new Promise((resolve, reject) => {
-    redisClient.set(whatsappNumber, JSON.stringify(conversation), (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
+    const completion = await openai.createCompletion({
+      model: 'text-davinci-003',
+      prompt: context,
+      max_tokens: 200,
     });
-  });
 
-  return completion.data.choices[0].text;
-};
+    // Update the conversation context for the WhatsApp number
+    conversation.context = completion.data.choices[0].text;
+
+    // Serialize the conversation data and store it back in Redis
+    await new Promise((resolve, reject) => {
+      redisClient.set(whatsappNumber, JSON.stringify(conversation), (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    return completion.data.choices[0].text;
+  } catch (err) {
+    console.error('Error fetching or storing conversation data:', err);
+    return 'An error occurred. Please try again later.';
+  }
+}
 
 client.on('message', (message) => {
   console.log(message.from, message.body);
@@ -126,17 +107,8 @@ app.get('/', (req, res) => {
   }
 });
 
-const startServer = async () => {
-  await new Promise((resolve) => {
-    redisClient.on('ready', () => {
-      console.log('Redis client is ready');
-      resolve();
-    });
-  });
-
-  initializeClient();
-
-  // Check if the server is already running on the specified port
+// Start the server only after the Redis client is ready
+redisClient.on('ready', () => {
   const server = app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
     // Log all data in Redis when the server is ready
@@ -157,6 +129,25 @@ const startServer = async () => {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-};
+});
 
-startServer();
+// Helper function to log all data in Redis
+function logAllDataInRedis() {
+  redisClient.keys('*', (err, keys) => {
+    if (err) {
+      console.error('Error fetching keys from Redis:', err);
+      return;
+    }
+
+    keys.forEach((key) => {
+      redisClient.get(key, (err, value) => {
+        if (err) {
+          console.error(`Error fetching value for key '${key}' from Redis:`, err);
+          return;
+        }
+
+        console.log(`Key: ${key}, Value: ${value}`);
+      });
+    });
+  });
+}
