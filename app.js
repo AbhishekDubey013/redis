@@ -59,42 +59,52 @@ client.on('ready', () => {
   console.log('Client is ready');
 });
 
-client.initialize();
+const initializeClient = () => {
+  client.initialize();
+};
 
-async function runCompletion(whatsappNumber, message) {
+const runCompletion = async (whatsappNumber, message) => {
   // Get the conversation history and context for the WhatsApp number from Redis
-  redisClient.get(whatsappNumber, async (err, serializedData) => {
-    if (err) {
-      console.error('Error fetching conversation data from Redis:', err);
-      return;
-    }
-
-    // Deserialize the conversation data from JSON
-    const conversation = serializedData
-      ? JSON.parse(serializedData)
-      : { history: [], context: '' };
-
-    // Store the latest message in the history and keep only the last 5 messages
-    conversation.history.push(message);
-    conversation.history = conversation.history.slice(-5);
-
-    const context = conversation.history.join('\n');
-
-    const completion = await openai.createCompletion({
-      model: 'text-davinci-003',
-      prompt: context,
-      max_tokens: 200,
+  const serializedData = await new Promise((resolve, reject) => {
+    redisClient.get(whatsappNumber, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data);
+      }
     });
-
-    // Update the conversation context for the WhatsApp number
-    conversation.context = completion.data.choices[0].text;
-
-    // Serialize the conversation data and store it back in Redis
-    redisClient.set(whatsappNumber, JSON.stringify(conversation));
-
-    return completion.data.choices[0].text;
   });
-}
+
+  const conversation = serializedData ? JSON.parse(serializedData) : { history: [], context: '' };
+
+  // Store the latest message in the history and keep only the last 5 messages
+  conversation.history.push(message);
+  conversation.history = conversation.history.slice(-5);
+
+  const context = conversation.history.join('\n');
+
+  const completion = await openai.createCompletion({
+    model: 'text-davinci-003',
+    prompt: context,
+    max_tokens: 200,
+  });
+
+  // Update the conversation context for the WhatsApp number
+  conversation.context = completion.data.choices[0].text;
+
+  // Serialize the conversation data and store it back in Redis
+  await new Promise((resolve, reject) => {
+    redisClient.set(whatsappNumber, JSON.stringify(conversation), (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+
+  return completion.data.choices[0].text;
+};
 
 client.on('message', (message) => {
   console.log(message.from, message.body);
@@ -116,24 +126,37 @@ app.get('/', (req, res) => {
   }
 });
 
-// Check if the server is already running on the specified port
-const server = app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-  // Log all data in Redis when the server is ready
-  logAllDataInRedis();
-});
-
-// Handle graceful shutdown
-const shutdown = () => {
-  console.log('Closing Redis client and exiting...');
-  redisClient.quit(() => {
-    console.log('Redis client closed.');
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit();
+const startServer = async () => {
+  await new Promise((resolve) => {
+    redisClient.on('ready', () => {
+      console.log('Redis client is ready');
+      resolve();
     });
   });
+
+  initializeClient();
+
+  // Check if the server is already running on the specified port
+  const server = app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+    // Log all data in Redis when the server is ready
+    logAllDataInRedis();
+  });
+
+  // Handle graceful shutdown
+  const shutdown = () => {
+    console.log('Closing Redis client and exiting...');
+    redisClient.quit(() => {
+      console.log('Redis client closed.');
+      server.close(() => {
+        console.log('Server closed.');
+        process.exit();
+      });
+    });
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+startServer();
