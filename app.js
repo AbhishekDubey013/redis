@@ -127,12 +127,16 @@ const server = app.listen(port, () => {
 });
 
 // Handle graceful shutdown
-process.on('SIGINT', () => {
+const shutdown = () => {
   console.log('Closing Redis client and exiting...');
   redisClient.quit(() => {
-    // Close the server when the Redis client is properly closed
+    console.log('Redis client closed.');
     server.close(() => {
+      console.log('Server closed.');
       process.exit();
     });
   });
-});
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
