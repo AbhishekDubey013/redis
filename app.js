@@ -84,7 +84,17 @@ function logAllDataInRedis() {
 }
 
 // Start the server only after the Redis client is ready
-redisClient.on('ready', () => {
+const startServer = async () => {
+  await new Promise((resolve) => {
+    redisClient.on('ready', () => {
+      console.log('Redis client is ready');
+      resolve();
+    });
+  });
+
+  initializeClient();
+
+  // Check if the server is already running on the specified port
   const server = app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
     // Log all data in Redis when the server is ready
@@ -105,4 +115,6 @@ redisClient.on('ready', () => {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-});
+};
+
+startServer();
