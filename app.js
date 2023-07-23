@@ -32,60 +32,15 @@ client.on('ready', () => {
   console.log('Client is ready');
 });
 
-client.initialize();
+const initializeClient = () => {
+  client.initialize();
+};
 
-const configuration = new Configuration({
-  apiKey: process.env.SECRET_KEY,
-});
-const openai = new OpenAIApi(configuration);
+const runCompletion = async (whatsappNumber, message) => {
+  // Rest of the code for runCompletion function...
 
-async function runCompletion(whatsappNumber, message) {
-  // Get the conversation history and context for the WhatsApp number from Redis
-  try {
-    const serializedData = await new Promise((resolve, reject) => {
-      redisClient.get(whatsappNumber, (err, data) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
-      });
-    });
-
-    const conversation = serializedData ? JSON.parse(serializedData) : { history: [], context: '' };
-
-    // Store the latest message in the history and keep only the last 5 messages
-    conversation.history.push(message);
-    conversation.history = conversation.history.slice(-5);
-
-    const context = conversation.history.join('\n');
-
-    const completion = await openai.createCompletion({
-      model: 'text-davinci-003',
-      prompt: context,
-      max_tokens: 200,
-    });
-
-    // Update the conversation context for the WhatsApp number
-    conversation.context = completion.data.choices[0].text;
-
-    // Serialize the conversation data and store it back in Redis
-    await new Promise((resolve, reject) => {
-      redisClient.set(whatsappNumber, JSON.stringify(conversation), (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
-
-    return completion.data.choices[0].text;
-  } catch (err) {
-    console.error('Error fetching or storing conversation data:', err);
-    return 'An error occurred. Please try again later.';
-  }
-}
+  return completion.data.choices[0].text;
+};
 
 client.on('message', (message) => {
   console.log(message.from, message.body);
@@ -106,6 +61,27 @@ app.get('/', (req, res) => {
     res.send('QR code image not available');
   }
 });
+
+// Helper function to log all data in Redis
+function logAllDataInRedis() {
+  redisClient.keys('*', (err, keys) => {
+    if (err) {
+      console.error('Error fetching keys from Redis:', err);
+      return;
+    }
+
+    keys.forEach((key) => {
+      redisClient.get(key, (err, value) => {
+        if (err) {
+          console.error(`Error fetching value for key '${key}' from Redis:`, err);
+          return;
+        }
+
+        console.log(`Key: ${key}, Value: ${value}`);
+      });
+    });
+  });
+}
 
 // Start the server only after the Redis client is ready
 redisClient.on('ready', () => {
@@ -130,24 +106,3 @@ redisClient.on('ready', () => {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 });
-
-// Helper function to log all data in Redis
-function logAllDataInRedis() {
-  redisClient.keys('*', (err, keys) => {
-    if (err) {
-      console.error('Error fetching keys from Redis:', err);
-      return;
-    }
-
-    keys.forEach((key) => {
-      redisClient.get(key, (err, value) => {
-        if (err) {
-          console.error(`Error fetching value for key '${key}' from Redis:`, err);
-          return;
-        }
-
-        console.log(`Key: ${key}, Value: ${value}`);
-      });
-    });
-  });
-}
