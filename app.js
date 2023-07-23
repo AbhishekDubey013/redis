@@ -83,15 +83,9 @@ function logAllDataInRedis() {
   });
 }
 
-// Start the server only after the Redis client is ready
-const startServer = async () => {
-  await new Promise((resolve) => {
-    redisClient.on('ready', () => {
-      console.log('Redis client is ready');
-      resolve();
-    });
-  });
-
+// Start the server only after the Redis client and WhatsApp client are ready
+redisClient.on('ready', () => {
+  console.log('Redis client is ready');
   initializeClient();
 
   // Check if the server is already running on the specified port
@@ -115,6 +109,4 @@ const startServer = async () => {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-};
-
-startServer();
+});
