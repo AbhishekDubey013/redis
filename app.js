@@ -1,3 +1,4 @@
+const express = require('express');
 const redis = require('redis');
 require('dotenv').config();
 
@@ -25,4 +26,18 @@ process.on('SIGINT', () => {
     console.log('Redis client closed.');
     process.exit();
   });
+});
+
+// Create an Express app
+const app = express();
+const port = process.env.PORT || 3000; // Use the PORT environment variable or 3000 if not set
+
+// Define a basic route to respond with "Hello, World!" for testing purposes
+app.get('/', (req, res) => {
+  res.send('Hello, World!');
+});
+
+// Start the HTTP server and listen on the specified port
+const server = app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
 });
