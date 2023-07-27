@@ -10,43 +10,39 @@ const client = redis.createClient({
 
 client.on('error', (err) => console.log('Redis Client Error', err));
 
-app.get('/', (req, res) => {
-  // Store a value in Redis
-  client.set('key', 'node redis', (err, reply) => {
-    if (err) {
-      console.error('Error setting value in Redis:', err);
-      res.status(500).send('Error setting value in Redis');
-      return;
-    }
+const startServer = async () => {
+  try {
+    // Connect to Redis
+    await client.connect();
 
-    // Retrieve the value from Redis
-    client.get('key', (err, value) => {
-      if (err) {
-        console.error('Error getting value from Redis:', err);
-        res.status(500).send('Error getting value from Redis');
-        return;
-      }
+    // Set a sample value in Redis
+    await client.set('key', 'node redis');
 
-      res.send(`Value from Redis: ${value}`);
+    // Get the value from Redis
+    const value = await client.get('key');
+    console.log('Found value:', value);
+
+    // Start the server
+    const server = app.listen(port, () => {
+      console.log(`Server is running on http://localhost:${port}`);
     });
-  });
-});
 
-const server = app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+    // Handle graceful shutdown
+    const shutdown = async () => {
+      console.log('Closing Redis client and exiting...');
+      await client.disconnect();
+      console.log('Redis client closed.');
+      server.close(() => {
+        console.log('Server closed.');
+        process.exit();
+      });
+    };
 
-// Handle graceful shutdown
-const shutdown = () => {
-  console.log('Closing Redis client and exiting...');
-  client.quit(() => {
-    console.log('Redis client closed.');
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit();
-    });
-  });
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  } catch (err) {
+    console.error('Error connecting to Redis:', err);
+  }
 };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+startServer();
