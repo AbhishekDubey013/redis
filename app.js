@@ -10,6 +10,11 @@ const client = redis.createClient({
 
 client.on('error', (err) => console.log('Redis Client Error', err));
 
+app.get('/', (req, res) => {
+  // Send a response when the root URL is accessed
+  res.send('Hello, this is a simple Redis example!');
+});
+
 const startServer = async () => {
   try {
     // Connect to Redis
