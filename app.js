@@ -12,6 +12,11 @@ client.on('error', (err) => console.log('Redis Client Error', err));
 
 app.use(express.json());
 
+// Define a route handler for the root URL
+app.get('/', (req, res) => {
+  res.send('Redis service is running!');
+});
+
 app.post('/store-chat-data', async (req, res) => {
   const { whatsappNumber, conversation } = req.body;
   
@@ -59,4 +64,3 @@ const startServer = async () => {
 };
 
 startServer();
-
