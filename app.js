@@ -35,32 +35,6 @@ app.post('/store-chat-data', async (req, res) => {
   res.sendStatus(200);
 });
 
-app.get('/get-chat-data/:whatsappNumber', async (req, res) => {
-  const { whatsappNumber } = req.params;
-
-  // Get the conversation data from Redis
-  await new Promise((resolve, reject) => {
-    client.get(`conversation_${whatsappNumber}`, (err, data) => {
-      if (err) {
-        console.error('Error getting conversation from Redis:', err);
-        reject(err);
-      } else {
-        resolve(data);
-      }
-    });
-  })
-    .then((data) => {
-      if (data) {
-        res.json(JSON.parse(data));
-      } else {
-        res.status(404).send('Conversation data not found.');
-      }
-    })
-    .catch((err) => {
-      res.status(500).send('Internal Server Error');
-    });
-});
-
 const startServer = async () => {
   try {
     // Connect to Redis
@@ -84,6 +58,11 @@ const startServer = async () => {
 
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
+
+    // Run an infinite loop to keep the server running
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second
+    }
   } catch (err) {
     console.error('Error connecting to Redis:', err);
   }
