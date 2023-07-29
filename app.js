@@ -10,29 +10,25 @@ const client = redis.createClient({
 
 client.on('error', (err) => console.log('Redis Client Error', err));
 
-app.use(express.json());
+const sampleArray = ['item1', 'item2', 'item3', 'item4', 'item5'];
 
-// Define a route handler for the root URL
-app.get('/', (req, res) => {
-  res.send('Redis service is running!');
-});
+app.get('/', async (req, res) => {
+  try {
+    // Set the sample array data in Redis
+    await client.set('sampleArray', JSON.stringify(sampleArray));
 
-app.post('/store-chat-data', async (req, res) => {
-  const { whatsappNumber, conversation } = req.body;
+    // Get the array data from Redis
+    const value = await client.get('sampleArray');
+    const parsedValue = JSON.parse(value);
 
-  // Store the conversation data in Redis
-  await new Promise((resolve, reject) => {
-    client.set(`conversation_${whatsappNumber}`, JSON.stringify(conversation), (err) => {
-      if (err) {
-        console.error('Error setting conversation in Redis:', err);
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
+    console.log('Sample array data from Redis:', parsedValue);
 
-  res.sendStatus(200);
+    // Send the array data as the response
+    res.json({ data: parsedValue });
+  } catch (err) {
+    console.error('Error fetching data from Redis:', err);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 const startServer = async () => {
@@ -58,11 +54,6 @@ const startServer = async () => {
 
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
-
-    // Run an infinite loop to keep the server running
-    while (true) {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second
-    }
   } catch (err) {
     console.error('Error connecting to Redis:', err);
   }
