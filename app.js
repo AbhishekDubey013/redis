@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 
 app.post('/store-chat-data', async (req, res) => {
   const { whatsappNumber, conversation } = req.body;
-  
+
   // Store the conversation data in Redis
   await new Promise((resolve, reject) => {
     client.set(`conversation_${whatsappNumber}`, JSON.stringify(conversation), (err) => {
@@ -33,6 +33,32 @@ app.post('/store-chat-data', async (req, res) => {
   });
 
   res.sendStatus(200);
+});
+
+app.get('/get-chat-data/:whatsappNumber', async (req, res) => {
+  const { whatsappNumber } = req.params;
+
+  // Get the conversation data from Redis
+  await new Promise((resolve, reject) => {
+    client.get(`conversation_${whatsappNumber}`, (err, data) => {
+      if (err) {
+        console.error('Error getting conversation from Redis:', err);
+        reject(err);
+      } else {
+        resolve(data);
+      }
+    });
+  })
+    .then((data) => {
+      if (data) {
+        res.json(JSON.parse(data));
+      } else {
+        res.status(404).send('Conversation data not found.');
+      }
+    })
+    .catch((err) => {
+      res.status(500).send('Internal Server Error');
+    });
 });
 
 const startServer = async () => {
